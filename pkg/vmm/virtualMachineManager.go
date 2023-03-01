@@ -100,3 +100,7 @@ func (v *VirtualMachineManager) Start(ctx context.Context) {
 		}
 	}
 }
+
+func (v *VirtualMachineManager) Stop() {
+	close(v.events)
+}

@@ -1,0 +1,19 @@
+{
+  "name": "fcnet-macvlan",
+  "cniVersion": "1.0.0",
+  "plugins": [
+    {
+      "type": "macvlan",
+      "master": "enp1s0",
+      "ipam": {
+        "type": "host-local",
+        "subnet": "192.168.0.0/24",
+        "rangeStart": "192.168.0.150",
+        "resolvConf": "/etc/resolv-firecracker.conf"
+      }
+    },
+    {
+      "type": "tc-redirect-tap"
+    }
+  ]
+}

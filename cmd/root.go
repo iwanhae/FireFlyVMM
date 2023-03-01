@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/iwanhae/monolithcloud/pkg/server"
 	"github.com/iwanhae/monolithcloud/pkg/vmm"
@@ -15,7 +17,7 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:  "monolithcloud",
+	Use:  "firefly",
 	RunE: rootRunE,
 }
 
@@ -36,17 +38,34 @@ func rootRunE(cmd *cobra.Command, args []string) error {
 		DataDir:        "./_data",
 		LogDir:         "./_log",
 		TemplateDir:    "./templates",
-		CNINetworkName: "fcnet",
+		CNINetworkName: "fcnet-bridge",
 		KernelArgs:     vmm.DefaultKernelArgs,
 	}
 	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		e := make(chan os.Signal, 1)
+		signal.Notify(e, syscall.SIGINT)
+		<-e
+		cancel()
+	}()
 	go vmManager.Start(ctx)
+	go func() {
+		<-ctx.Done()
+		vmManager.Stop()
+	}()
+
 	for i := 1; i <= 3; i++ {
 		vmManager.Request(&vmm.StartVMMessage{VMID: fmt.Sprintf("%05d", i)})
 	}
 
 	h := server.NewServer(server.ServerOpts{})
-	if err := http.ListenAndServe(":8000", h); err != nil {
+	s := http.Server{Addr: ":9000", Handler: h}
+	go func() {
+		<-ctx.Done()
+		s.Close()
+	}()
+	if err := s.ListenAndServe(); err != nil {
 		return err
 	}
 	return nil
