@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func GenerateCloudConfigDisk(ctx context.Context, CloudConfig CLoudConfig, Path string) error {
+func GenerateCloudConfigDisk(ctx context.Context, CloudConfig CloudConfig, Path string) error {
 	writer, err := iso9660.NewWriter()
 	if err != nil {
 		return fmt.Errorf("failed to create ISO writer: %w", err)

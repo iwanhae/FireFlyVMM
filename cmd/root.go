@@ -5,14 +5,15 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/iwanhae/monolithcloud/pkg/server"
 	"github.com/iwanhae/monolithcloud/pkg/vmm"
+	"github.com/iwanhae/monolithcloud/pkg/vmm/cloudinit"
 	"github.com/spf13/cobra"
 )
 
@@ -39,7 +40,6 @@ func rootRunE(cmd *cobra.Command, args []string) error {
 		LogDir:         "./_log",
 		TemplateDir:    "./templates",
 		CNINetworkName: "fcnet-bridge",
-		KernelArgs:     vmm.DefaultKernelArgs,
 	}
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -49,15 +49,33 @@ func rootRunE(cmd *cobra.Command, args []string) error {
 		<-e
 		cancel()
 	}()
-	go vmManager.Start(ctx)
+	vmManager.Start(ctx)
 	go func() {
 		<-ctx.Done()
 		vmManager.Stop()
 	}()
 
-	for i := 1; i <= 3; i++ {
-		vmManager.Request(&vmm.StartVMMessage{VMID: fmt.Sprintf("%05d", i)})
-	}
+	vmManager.Request(&vmm.CreateVMMessage{
+		Name:            "Hello",
+		MemSizeMib:      2048,
+		VcpuCount:       2,
+		StorageGB:       50,
+		RootfsTemplate:  "ubuntu_2204",
+		VmlinuxTemplate: "5.10.156",
+		KernelArgs:      vmm.DefaultKernelArgs,
+		CloudConfig:     cloudinit.NewDefaultCloudConfig(),
+	})
+	vmManager.Request(&vmm.StartVMMessage{
+		VMID: "00001",
+	})
+	time.Sleep(10 * time.Second)
+	vmManager.Request(&vmm.StopVMMessage{
+		VMID: "00001",
+	})
+	time.Sleep(10 * time.Second)
+	vmManager.Request(&vmm.DeleteVMMessage{
+		VMID: "00001",
+	})
 
 	h := server.NewServer(server.ServerOpts{})
 	s := http.Server{Addr: ":9000", Handler: h}

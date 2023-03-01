@@ -1,7 +1,21 @@
 package cloudinit
 
+func NewDefaultCloudConfig() CloudConfig {
+	return CloudConfig{
+		Hostname:         "firefly",
+		DisableRoot:      false,
+		PreserveHostname: false,
+		SystemInfo:       SystemInfoConfig{Distro: "ubuntu"},
+		Users:            []UserCoinfig{},
+		GrowPartition: GrowPartitionConfig{
+			Mode:    GrowPartitionMode_Auto,
+			Devices: []string{"/"},
+		},
+	}
+}
+
 // https://cloudinit.readthedocs.io/en/latest/reference/modules.html
-type CLoudConfig struct {
+type CloudConfig struct {
 	Hostname         string              `yaml:"hostname"`
 	DisableRoot      bool                `yaml:"disable_root"`
 	PreserveHostname bool                `yaml:"preserve_hostname"`

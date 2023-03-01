@@ -26,14 +26,32 @@ type VirtualMachine struct {
 	VcpuCount  int64  `json:"vcpu_count"`
 	VMLinux    string `json:"vmlinux"`
 
-	CloudConfig cloudinit.CLoudConfig `json:"cloud_config"`
+	CloudConfig cloudinit.CloudConfig `json:"cloud_config"`
 	KernelArgs  string                `json:"kernel_args"`
 
 	vmMetaPath string               `json:"-"`
 	m          *firecracker.Machine `json:"-"`
-	stdout     io.WriteCloser
-	stderr     io.WriteCloser
+	stdout     io.WriteCloser       `json:"-"`
+	stderr     io.WriteCloser       `json:"-"`
 	//stdin  io.ReadCloser
+}
+
+func (vm *VirtualMachine) IsRunning(ctx context.Context) bool {
+	if vm.m == nil {
+		return true
+	}
+	// TODO: chekc status
+	info, err := vm.m.DescribeInstanceInfo(ctx)
+	if err != nil {
+		return false
+	}
+	if info.State == nil {
+		return false
+	}
+	if *info.State == "Running" {
+		return true
+	}
+	return false
 }
 
 func (vm *VirtualMachine) SocketPath(socketDir string) string {
@@ -75,6 +93,7 @@ func (vm *VirtualMachine) watch(ctx context.Context, m *firecracker.Machine) {
 			Str("id", vm.ID).
 			Msg("VM stopped")
 	}
+	m.StopVMM()
 	vm.stdout.Close()
 	vm.stderr.Close()
 }
