@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sync"
 
-	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,8 +22,9 @@ type VirtualMachineManager struct {
 
 	CNINetworkName string
 
-	events chan Message
-	vmMap  map[ /*VMID */ string]*VirtualMachine
+	events    chan Message
+	vmMap     map[ /*VMID */ string]*VirtualMachine
+	vmMapLock sync.Mutex
 }
 
 type MessageHandler func(ctx context.Context, m Message) error
@@ -37,25 +38,18 @@ func (v *VirtualMachineManager) Request(m Message) error {
 	return nil
 }
 
-func (v *VirtualMachineManager) loadVM(VMID string) (*VirtualMachine, error) {
-	vm := newVirtualMachine(v.getVMMetaPath(VMID))
-
-	f, err := os.OpenFile(
-		path.Join(v.DataDir, VMID, METADATA_FILENAME),
-		os.O_RDONLY, 0755)
+func (v *VirtualMachineManager) GetVM(VMID string) (VirtualMachine, error) {
+	vm, err := v.getVMRef(VMID)
 	if err != nil {
-		return vm, err
+		return VirtualMachine{}, err
 	}
 
-	if err := yaml.NewDecoder(f).Decode(&vm); err != nil {
-		return vm, err
-	}
-
-	v.vmMap[VMID] = vm
-	return vm, nil
+	return *vm, nil
 }
 
-func (v *VirtualMachineManager) GetVM(VMID string) (*VirtualMachine, error) {
+func (v *VirtualMachineManager) getVMRef(VMID string) (*VirtualMachine, error) {
+	v.vmMapLock.Lock()
+	defer v.vmMapLock.Unlock()
 	vm, ok := v.vmMap[VMID]
 	if ok {
 		return vm, nil
@@ -63,35 +57,27 @@ func (v *VirtualMachineManager) GetVM(VMID string) (*VirtualMachine, error) {
 
 	vm, err := v.loadVM(VMID)
 	if err != nil {
-		return vm, fmt.Errorf("%q VM not found: %w", VMID, err)
+		return nil, fmt.Errorf("%q VM not found: %w", VMID, err)
+	} else {
+		v.vmMap[VMID] = vm
 	}
 
 	return vm, nil
 }
 
-func (v *VirtualMachineManager) Start(ctx context.Context) error {
-	log.Info().Msg("VMM is started")
-	defer log.Info().Msg("VMM is terminated")
+func (v *VirtualMachineManager) loadVM(VMID string) (*VirtualMachine, error) {
+	vm := newVirtualMachine(v.getVMMetaPath(VMID))
 
-	if err := v.prepareDirectories(ctx); err != nil {
-		return fmt.Errorf("fail to create directories: %w", err)
+	f, err := os.OpenFile(
+		path.Join(v.DataDir, VMID, METADATA_FILENAME),
+		os.O_RDONLY, 0755)
+	if err != nil {
+		return nil, err
 	}
 
-	if v.vmMap == nil {
-		v.vmMap = make(map[string]*VirtualMachine)
+	if err := yaml.NewDecoder(f).Decode(&vm); err != nil {
+		return nil, err
 	}
 
-	if v.events != nil {
-		return fmt.Errorf("already started")
-	}
-	v.events = make(chan Message, 10)
-
-	go v.loop(ctx)
-
-	return nil
-}
-
-func (v *VirtualMachineManager) Stop() {
-	close(v.events)
-	v.events = nil
+	return vm, nil
 }

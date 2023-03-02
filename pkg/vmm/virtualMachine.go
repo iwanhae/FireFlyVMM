@@ -38,7 +38,7 @@ type VirtualMachine struct {
 
 func (vm *VirtualMachine) IsRunning(ctx context.Context) bool {
 	if vm.m == nil {
-		return true
+		return false
 	}
 	// TODO: chekc status
 	info, err := vm.m.DescribeInstanceInfo(ctx)

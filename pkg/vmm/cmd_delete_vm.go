@@ -17,8 +17,8 @@ func (*DeleteVMMessage) MetaString() string {
 	return "Delete VM"
 }
 
-func (v *VirtualMachineManager) DeleteVM(ctx context.Context, msg *DeleteVMMessage) error {
-	vm, err := v.GetVM(msg.VMID)
+func (v *VirtualMachineManager) deleteVM(ctx context.Context, msg *DeleteVMMessage) error {
+	vm, err := v.getVMRef(msg.VMID)
 	if err != nil {
 		return nil
 	}

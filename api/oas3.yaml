@@ -1,9 +1,11 @@
 openapi: "3.0.0"
 info:
   version: 1.0.0
-  title: MonolithCloud
+  title: FireFlyVMM
   license:
     name: Apache 2.0
+servers:
+  - url: http://127.0.0.1:9000
 paths:
   /v0/vm:
     get:
@@ -12,12 +14,14 @@ paths:
       tags:
         - v0
       responses:
-        '200':
+        "200":
           description: List defined VMs
           content:
-            application/json:    
+            application/json:
               schema:
-                $ref: "#/components/schemas/VMInfos"
+                type: array
+                items:
+                  $ref: "#/components/schemas/VirtualMachine"
         default:
           description: unexpected error
           content:
@@ -29,8 +33,13 @@ paths:
       operationId: createVM
       tags:
         - v0
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VMSpec"
       responses:
-        '201':
+        "201":
           description: Make a reservation to create VM
         default:
           description: unexpected error
@@ -42,6 +51,8 @@ paths:
     get:
       summary: Show VM details
       operationId: getVM
+      tags:
+        - v0
       parameters:
         - name: vmId
           in: path
@@ -50,55 +61,211 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Spec and Status of the VM
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/VMInfo"
+                $ref: "#/components/schemas/VirtualMachine"
         default:
           description: unexpected error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+    delete:
+      summary: Delete VM
+      operationId: deleteVM
+      tags:
+        - v0
+      parameters:
+        - name: vmId
+          in: path
+          required: true
+          description: The id of the VM to retrieve
+          schema:
+            type: integer
+      responses:
+        "202":
+          description: It will be deleted
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v0/vm/{vmId}/status:
+    get:
+      summary: Get VM Status
+      operationId: getVMStatus
+      tags:
+        - v0
+      parameters:
+        - name: vmId
+          in: path
+          required: true
+          description: The id of the VM to retrieve
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: got Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VMStatus"
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      summary: Update VM Status
+      operationId: setVMStatus
+      tags:
+        - v0
+      parameters:
+        - name: vmId
+          in: path
+          required: true
+          description: The id of the VM to retrieve
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DesiredVMStatus"
+      responses:
+        "200":
+          description: Will be handled
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v0/vm/{vmId}/log:
+    get:
+      summary: Get VM Log
+      operationId: getVMLog
+      tags:
+        - v0
+      parameters:
+        - name: vmId
+          in: path
+          required: true
+          description: The id of the VM to retrieve
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Log is streamed
+          content:
+            text/event-stream: {}
 components:
   schemas:
-    VMSpec:
+    CloudConfig:
+      type: object
+      required:
+        - users
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/CloudConfigUser"
+    CloudConfigUser:
+      type: object
+      required:
+        - name
+        - ssh_authorized_keys
+      properties:
+        name:
+          type: string
+          example: root
+        ssh_authorized_keys:
+          type: array
+          items:
+            type: string
+          example:
+            - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCgaHWoWSrNu2ScTHLnnuk1+VxC35K/e1YAqvckizyVfSCPewEfgV7Ah/QBXpNf2cfQydM3VZswcPmms9BIpERbDAz8CkOo+6JZkfYKrIORiBWLnH+leJupvkch0iTb0ckbjA1VewXOt+WR8hvHTOzdMrt04enQjlG+cztcA9ybFKfz0L9V5mntBmXiDkMG35R6ANblvesylywRO0ZgSXzWN97veDDXzDRhdkKHGR9kdcUfmsp7rcXoEphkKTzoXREgyql25bthRkymxD1DaHqqbYSYYxyUdpjlea5Yj1KqSw16SbGWi0P0GUSSnftE0oScBJe3YTxbR1SixC49Y9tC3Zv4b+D+3hDqCBFkU8EvVhlc7gqJDeOUgVmbeduPztU8fUOCbELjGmTLMKf0NLrwg0KpuAol4+vmkVRl0S0NwJkVA2GIOyUizy7U5aQEPEBgl7jtHiQzVd5a+gI6/SHjyl1q0+YWcpqXT3+6/UV6p6z1YKXwDOC6Z7QRP1qIY7c= root@mini-server
+    VirtualMachine:
       type: object
       required:
         - id
-        - name
         - ip
-        - cpu
-        - ram
-        - disk
+        - name
+        - memory_size_mb
+        - vmlinux
+        - cloud_config
       properties:
         id:
-          type: integer
-        name:
           type: string
+          example: "00001"
         ip:
           type: string
-        cpu:
+          example: "10.10.10.10"
+        name:
+          type: string
+          example: "hello-ubuntu"
+        memory_size_mb:
           type: integer
-        ram:
-          type: integer
-        disk:
-          type: integer
-    VMInfo:
+          example: 1024
+        vmlinux:
+          type: string
+          example: "5.10.156"
+        cloud_config:
+          $ref: "#/components/schemas/CloudConfig"
+    VMSpec:
       type: object
       required:
-        - spec
-        - status
+        - name
+        - memory_size_mb
+        - vcpu_count
+        - vmlinux
+        - rootfs
+        - storage_gb
+        - ssh_authorized_keys
       properties:
-        spec:
-          $ref: "#/components/schemas/VMSpec"
-    VMInfos:
-      type: array
-      maxItems: 100
-      items:
-        $ref: "#/components/schemas/VMInfo"
+        name:
+          type: string
+          example: "hello-ubuntu"
+        ip:
+          type: string
+          example: "192.168.0.1"
+        vcpu_count:
+          type: integer
+          example: 2
+        memory_size_mb:
+          type: integer
+          example: 1024
+        storage_gb:
+          type: integer
+          example: 10
+        ssh_authorized_keys:
+          type: array
+          items:
+            type: string
+          example:
+            - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCgaHWoWSrNu2ScTHLnnuk1+VxC35K/e1YAqvckizyVfSCPewEfgV7Ah/QBXpNf2cfQydM3VZswcPmms9BIpERbDAz8CkOo+6JZkfYKrIORiBWLnH+leJupvkch0iTb0ckbjA1VewXOt+WR8hvHTOzdMrt04enQjlG+cztcA9ybFKfz0L9V5mntBmXiDkMG35R6ANblvesylywRO0ZgSXzWN97veDDXzDRhdkKHGR9kdcUfmsp7rcXoEphkKTzoXREgyql25bthRkymxD1DaHqqbYSYYxyUdpjlea5Yj1KqSw16SbGWi0P0GUSSnftE0oScBJe3YTxbR1SixC49Y9tC3Zv4b+D+3hDqCBFkU8EvVhlc7gqJDeOUgVmbeduPztU8fUOCbELjGmTLMKf0NLrwg0KpuAol4+vmkVRl0S0NwJkVA2GIOyUizy7U5aQEPEBgl7jtHiQzVd5a+gI6/SHjyl1q0+YWcpqXT3+6/UV6p6z1YKXwDOC6Z7QRP1qIY7c= root@mini-server
+        rootfs:
+          type: string
+          example: ubuntu_2204
+        vmlinux:
+          type: string
+          example: 5.10.156
+    VMStatus:
+      type: string
+      enum:
+        - running
+        - stoped
+    DesiredVMStatus:
+      type: string
+      enum:
+        - run
+        - stop
+        - forceStop
     Error:
       type: object
       required:

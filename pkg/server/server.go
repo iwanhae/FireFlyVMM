@@ -4,13 +4,16 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/iwanhae/monolithcloud/pkg/vmm"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/rs/zerolog/hlog"
 	"github.com/rs/zerolog/log"
 )
 
-type ServerOpts struct{}
+type ServerOpts struct {
+	VMM *vmm.VirtualMachineManager
+}
 
 func NewServer(opts ServerOpts) http.Handler {
 	e := echo.New()
@@ -33,9 +36,23 @@ func NewServer(opts ServerOpts) http.Handler {
 	)
 
 	// etc
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if err := next(c); err != nil {
+				c.JSON(500, Error{
+					Code:    "-1",
+					Message: err.Error(),
+				})
+			}
+			return nil
+		}
+	})
 	e.Use(middleware.Recover())
 
 	// API
+	RegisterHandlers(e, &Server{
+		vmm: opts.VMM,
+	})
 
 	return e
 }

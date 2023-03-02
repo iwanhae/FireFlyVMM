@@ -10,6 +10,7 @@ import (
 	"github.com/firecracker-microvm/firecracker-go-sdk"
 	"github.com/firecracker-microvm/firecracker-go-sdk/client/models"
 	"github.com/iwanhae/monolithcloud/pkg/vmm/cloudinit"
+	"github.com/rs/zerolog/log"
 )
 
 var _ Message = &StartVMMessage{}
@@ -22,9 +23,9 @@ func (*StartVMMessage) MetaString() string {
 	return "Start VM"
 }
 
-func (v *VirtualMachineManager) StartVM(ctx context.Context, msg *StartVMMessage) error {
+func (v *VirtualMachineManager) startVM(ctx context.Context, msg *StartVMMessage) error {
 	// Load VM Meta
-	vm, err := v.GetVM(msg.VMID)
+	vm, err := v.getVMRef(msg.VMID)
 	if err != nil {
 		return fmt.Errorf("failed to load VM: %w", err)
 	}
@@ -72,17 +73,24 @@ func (v *VirtualMachineManager) StartVM(ctx context.Context, msg *StartVMMessage
 	}
 
 	// Open Log Files
-	stdout, err := os.OpenFile(
-		path.Join(v.LogDir, fmt.Sprintf("%s_stdout.log", vm.ID)),
-		os.O_WRONLY|os.O_CREATE, 0755,
-	)
+	stdoutPath := path.Join(v.LogDir, fmt.Sprintf("%s_stdout.log", vm.ID))
+	stderrPath := path.Join(v.LogDir, fmt.Sprintf("%s_stderr.log", vm.ID))
+	// Try best
+	if err := func() (err error) {
+		err = os.Remove(stdoutPath)
+		if err == nil {
+			err = os.Remove(stderrPath)
+		}
+		return
+	}(); err != nil {
+		log.Ctx(ctx).Warn().Err(err).Msg("failed to delete existing logs")
+	}
+
+	stdout, err := os.OpenFile(stdoutPath, os.O_WRONLY|os.O_CREATE, 0755)
 	if err != nil {
 		return fmt.Errorf("fail to open stdout file: %w", err)
 	}
-	stderr, err := os.OpenFile(
-		path.Join(v.LogDir, fmt.Sprintf("%s_stderr.log", vm.ID)),
-		os.O_WRONLY|os.O_CREATE, 0755,
-	)
+	stderr, err := os.OpenFile(stderrPath, os.O_WRONLY|os.O_CREATE, 0755)
 	if err != nil {
 		return fmt.Errorf("fail to open stderr file: %w", err)
 	}
@@ -90,21 +98,22 @@ func (v *VirtualMachineManager) StartVM(ctx context.Context, msg *StartVMMessage
 	vm.stderr = stderr
 
 	if err := func() error {
+		commandCtx := context.Background()
 		cmd := firecracker.VMCommandBuilder{}.
 			WithBin(fcBin).
 			WithSocketPath(vm.SocketPath(v.SocketDir)).
 			WithStdout(vm.stdout).
 			WithStderr(vm.stderr).
-			Build(ctx)
-		m, err := firecracker.NewMachine(ctx, c, firecracker.WithProcessRunner(cmd))
+			Build(commandCtx)
+		m, err := firecracker.NewMachine(commandCtx, c, firecracker.WithProcessRunner(cmd))
 		if err != nil {
 			return fmt.Errorf("failed creating machine: %w", err)
 		}
 
-		if err := m.Start(ctx); err != nil {
+		if err := m.Start(commandCtx); err != nil {
 			return err
 		}
-		go vm.watch(ctx, m)
+		go vm.watch(commandCtx, m)
 		return nil
 	}(); err != nil {
 		vm.stdout.Close()

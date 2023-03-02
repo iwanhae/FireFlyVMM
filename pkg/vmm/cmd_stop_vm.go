@@ -16,8 +16,8 @@ func (*StopVMMessage) MetaString() string {
 	return "Stop VM"
 }
 
-func (v *VirtualMachineManager) StopVM(ctx context.Context, msg *StopVMMessage) error {
-	vm, err := v.GetVM(msg.VMID)
+func (v *VirtualMachineManager) stopVM(ctx context.Context, msg *StopVMMessage) error {
+	vm, err := v.getVMRef(msg.VMID)
 	if err != nil {
 		return err
 	}
